@@ -1,0 +1,102 @@
+#install libraries 
+library(caret)
+library(rpart)
+library(lme4)
+library(bayesm)
+library(MASS)
+library(lars)
+library(pls)
+library(gbm)
+library(readxl)
+library(car)
+require(randomForest)
+library(stats)
+
+
+
+#load training data 
+train_data <- read_csv("~/Desktop/ddd/train_data.csv")
+View(train_data)
+train_data
+str(train_data)
+
+#load testing data
+library(readr)
+test_data <- read_csv("~/Desktop/ddd/test_data.csv")
+View(test_data)
+test_data
+str(test_data)
+
+accuracy_table <- data.frame('Model_name' = c('1', '2',  '3', '4', '5', '6'), "RMSE" = NA)
+
+
+#Run Lm model with 2  
+model_glm <- glm(RESP~days_since_last_activity+Upmarket, data=train_data )
+summary(model_glm)
+
+#pridict glm model
+predict_glm <- predict(model_glm, test_data)
+
+#estimate RMSE accuracy table value #1 
+accuracy_table[1, 2] <- sqrt(mean((test_data$RESP - predict_glm)^2))
+
+#Run GlM model with mulitple 
+model.glm2 <- glm(RESP ~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274+V290, family=binomial(link="logit"), data=train_data )
+
+#pridict glm model
+predict_glm2 <- predict(model_glm2, test_data)
+
+accuracy_table[2, 2] <- sqrt(mean((test_data$RESP - predict_glm2)^2))
+
+###########################################################################
+#Run Reression Tree with just 2 
+model_tree <- rpart(RESP~days_since_last_activity+Upmarket, data=train_data, method = 'anova', control = rpart.control(cp = 0.005, minsplit = 20))
+predict_tree <- predict(model_tree, data=test_data)
+
+# estimate RMSE accuracy table value #2 
+accuracy_table[3, 2] <- sqrt(mean((test_data$RESP - model_tree)^2))
+
+#regression tree with secondary variables 
+model_tree2 <- rpart(RESP ~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274+V290, family=binomial(link="logit"), data=train_data, method = 'anova', control = rpart.control(cp = 0.005, minsplit = 20))
+predict_tree2 <- predict(model_tree2, data=test_data)
+
+# estimate RMSE accuracy table value #3 
+accuracy_table[4, 2] <- sqrt(mean((test_data$RESP - model_tree2)^2))
+
+
+
+#pls
+#create model 
+m.pls <- plsr(RESP~days_since_last_activity+Upmarket, data=train_data, validation="CV")
+summary(m.pls)
+
+# select number of components (by CV)
+ncomp <- which.min(m.pls$validation$adj)
+
+# predict
+predict_pls <- predict(m.pls, data=test_data , ncomp=ncomp)
+
+#estimate RMSE 
+accuracy_table[5, 2] <- sqrt(mean((test_data$RESP - predict_pls)^2))
+
+
+#create PLSR with multiple
+m.pls2 <-plsr(RESP~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274+V290, family=binomial(link="logit"), data=train_data )
+
+
+# select number of components (by CV)
+ncomp <- which.min(m.pls2$validation$adj)
+
+# predict
+predict_pls2 <- predict(m.pls2, data=test_data , ncomp=ncomp)
+
+#estimate RMSE 
+accuracy_table[6, 2] <- sqrt(mean((test_data$RESP - predict_pls2)^2))
+
+#view Table 
+accuracy_table
+
+
+
+qda.fit <- qda(RESP ~days_since_last_activity+Upmarket, data=train_data)
+predict_qda<- predict(qda.fit, test_data)
