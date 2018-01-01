@@ -1,0 +1,148 @@
+
+#set options
+options(warn = -1, digits = 2)
+#call library
+library(car)
+#read data
+data_from_file <- read.csv("FINAL_FINAL_Match_Data.csv", sep = ";", header = TRUE, dec=',')
+
+#run pca
+comp <- prcomp(data_from_file[, -1], .scale = TRUE)
+#compute standard deviation of each principal component
+std_dev <- comp$sdev
+#compute variance
+pr_var <- std_dev^2
+#proportion of variance explained
+prop_varex <- pr_var/sum(pr_var)
+#cumulative proportion
+cumsum(prop_varex)
+#cumulative scree plot
+plot(cumsum(prop_varex), xlab = "Principal Component",
+              ylab = "Cumulative Proportion of Variance Explained",
+              type = "b")
+#biplot
+#biplot(comp, scale = 0)
+
+#set factors
+data_from_file[, sapply(data_from_file, function(x){length(unique(x))==2})] <- lapply(data_from_file[, sapply(data_from_file, function(x){length(unique(x))==2})], factor)
+
+#call library for reshape
+if(!"reshape2" %in% installed.packages()) install.packages("reshape2")
+library(reshape2)
+#reshape state
+data_long <- melt(data_from_file, id.vars = colnames(data_from_file)[!grepl('State', colnames(data_from_file))])
+#select positive
+data_long <- data_long[which(data_long$value == 1), -ncol(data_long)]
+#fix name
+colnames(data_long)[ncol(data_long)] <- 'State'
+
+#reshape V68
+data_long <- melt(data_long, id.vars = colnames(data_long)[!grepl('V68_', colnames(data_long))])
+#select positive
+data_long <- data_long[which(data_long$value == 1), -ncol(data_long)]
+#fix name
+colnames(data_long)[ncol(data_long)] <- 'V68'
+
+
+#reshape V69
+data_long <- melt(data_long, id.vars = colnames(data_long)[!grepl('V69_', colnames(data_long))])
+#select positive
+data_long <- data_long[which(data_long$value == 1), -ncol(data_long)]
+#fix name
+colnames(data_long)[ncol(data_long)] <- 'V69'
+
+#reshape V86
+data_long <- melt(data_long, id.vars = colnames(data_long)[!grepl('V86_', colnames(data_long))])
+#select positive
+data_long <- data_long[which(data_long$value == 1), -ncol(data_long)]
+#fix name
+colnames(data_long)[ncol(data_long)] <- 'V86'
+
+#reshape V109
+data_long <- melt(data_long, id.vars = colnames(data_long)[!grepl('V109_', colnames(data_long))])
+#select positive
+data_long <- data_long[which(data_long$value == 1), -ncol(data_long)]
+#fix name
+colnames(data_long)[ncol(data_long)] <- 'V109'
+
+#reshape V134
+data_long <- melt(data_long, id.vars = colnames(data_long)[!grepl('V134_', colnames(data_long))])
+#select positive
+data_long <- data_long[which(data_long$value == 1), -ncol(data_long)]
+#fix name
+colnames(data_long)[ncol(data_long)] <- 'V134'
+
+#reshape V140
+data_long <- melt(data_long, id.vars = colnames(data_long)[!grepl('V140_', colnames(data_long))])
+#select positive
+data_long <- data_long[which(data_long$value == 1), -ncol(data_long)]
+#fix name
+colnames(data_long)[ncol(data_long)] <- 'V140'
+
+#convert to factor
+data_long[, 112:118] <- lapply(data_long[, 112:118], factor)
+#select complete
+data_long <- data_long[complete.cases(data_long),]
+
+## Model selection by exhaustive search
+
+
+require(leaps)
+require(MASS)
+#run model
+formula = as.formula(paste0("RESP ~ ", paste(colnames(data_long)[-1], collapse = " +")))
+#find best subset
+reg1 <- regsubsets(formula, data = data_long, nvmax = 5, really.big = TRUE)
+summary(reg1)
+
+
+The function regsubsets identifies the variables days_since_last_activity, Upmarket1, V61, and V276 as the best four.
+
+## Model selection by backward stepwise replacement
+
+```{r}
+#run model
+reg1 <- regsubsets(formula, data = data_long,  method = "backward")
+#find best subset
+summary(reg1)
+```
+
+
+#The function regsubsets identifies the variables days_since_last_activity, Upmarket1, V61, and V140_level_2 as the best four.
+
+## Model selection by forward stepwise replacement
+
+
+#run model
+reg1 <- regsubsets(formula, data = data_long,  method = "forward")
+#find best subset
+summary(reg1)
+
+
+#The function regsubsets identifies the variables days_since_last_activity, Upmarket1, V61, and V276 as the best four.
+
+
+## Model selection by sequential replacement
+
+
+#run model
+reg1 <- regsubsets(formula, data = data_long,  method = "seqrep")
+#find best subset
+summary(reg1)
+
+#The function regsubsets identifies the variables days_since_last_activity, Upmarket1, V61, and V276 as the best four.
+
+
+#glm
+glm_model <- glm(formula = formula, data_long, family = binomial(link = 'logit'))
+#view importance
+u <- summary(glm_model)
+u
+
+
+#Important vars according generalized linear model at 5% significant level arranged by their significance: 
+
+coef <- u$coefficients[which(u$coefficients[, 4]<= 0.05), ]
+coef[order(coef[, 4]),]
+
+
