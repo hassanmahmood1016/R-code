@@ -1,0 +1,204 @@
+library(caret)
+library(rpart)
+library(lme4)
+library(bayesm)
+library(MASS)
+library(lars)
+library(pls)
+library(gbm)
+library(readxl)
+library(car)
+require(randomForest)
+install.packages("yaImpute")
+library(yaImpute)
+
+library(readr)
+train = as.data.frame(read_csv("~/Desktop/ddd/train_data.csv")) # Name of your training data
+test = as.data.frame(read_csv("~/Desktop/ddd/test_data.csv")) # Name of your testing data
+
+# The syntax for the qda() function is identical to lda(). Essentially, most of the code below is identical to the LDA code above, except that we use the qda(){MASS} function instead of lda(){MASS}
+
+require(MASS) # Contains the lda(){MASS} function
+
+# heart.fit.qda = qda(chd ~ ., data=heart[train,])
+best = qda(RESP~ log(days_since_last_activity)+(Upmarket) +V40+V61+V124+V192+V268+V274+V290+V88+V289, family=binomial(link="logit"), data=train )
+
+summary(best)
+best
+
+# Now let's make predictions with the train model and the test subsample
+qda.pred=predict(best, test)
+
+qda.pred$class # Inspect the classifications
+qda.pred$posterior # Inspect the respective probabilities
+qda.pred$posterior[,2] # Just the second column for prob(chd=1)
+
+
+# And display the resulting confusion matrices
+# Lambda=0.50
+qda.confmat <- table(qda.pred$class, test$RESP) 
+qda.confmat
+
+
+TruN=qda.confmat[1,1] # True negatives
+TruP=qda.confmat[2,2] # True positives
+FalN=qda.confmat[1,2] # False negatives
+FalP=qda.confmat[2,1] # False positives
+TotN=qda.confmat[1,1] + qda.confmat[2,1] # Total negatives
+TotP=qda.confmat[1,2] + qda.confmat[2,2] # Total positives
+Tot=TotN+TotP # Total
+
+# Now let's use these to compute accuracy and error rates
+
+Accuracy.Rate=(TruN+TruP)/Tot
+# Accuracy.Rate # Check it out
+
+Error.Rate=(FalN+FalP)/Tot
+# Error.Rate # Check it out
+
+# Sensitivity -- rate of correct positives
+
+Sensitivity=TruP/TotP # Proportion of correct positives
+# Sensitivity # Check it out
+
+# Specificity -- rate of correct negatives
+
+Specificity=TruN/TotN # Proportion of correct negatives
+# Specificity
+
+# False Positive Rate = 1 - specificity (useful for ROC curves)
+
+FalP.Rate = 1 - Specificity
+# FalP.Rate
+
+qda.rates=c(Accuracy.Rate, Error.Rate, Sensitivity, Specificity, FalP.Rate)
+
+names(qda.rates)=c("Accuracy Rate", "Error Rate", "Sensitivity", "Specificity", "False Positives")
+
+qda.rates
+
+
+#OR --use code for error stats function below
+errorStats(pred$class, test$RESP)
+
+
+#####################################################
+
+model3interactlog <-glm(RESP ~log(days_since_last_activity)+Upmarket+V40+V61+V124+V192+V268+V274+V290+days_since_last_activity*Upmarket, family=binomial(link="logit"), data=train)
+
+
+glm.probs.test=predict(model3interactlog, test, type="response")
+probs.test[1:10] 
+
+
+glm.preds.test= ifelse(glm.probs.test>0.5, 1,0) 
+preds.test[1:10] # List first 10
+
+conf.mat <- table(glm.preds.test, "Actual"=test$RESP) # To cross tabulate Prediction with Actual
+conf.mat
+
+glm.rates <-errorStats(glm.preds.test, test$RESP)
+glm.rates
+
+
+errorStats(glm.preds.test, test$RESP)
+
+#
+errorStats=function(preds, actuals) {
+  confmat <- table(preds,actuals)
+  TruN=confmat[1,1] # True negatives
+  TruP=confmat[2,2] # True positives
+  FalN=confmat[1,2] # False negatives
+  FalP=confmat[2,1] # False positives
+  TotN=confmat[1,1] + confmat[2,1] # Total negatives
+  TotP=confmat[1,2] + confmat[2,2] # Total positives
+  Tot=TotN+TotP # Total
+  # Now let's use these to compute accuracy and error rates
+  Accuracy.Rate=(TruN+TruP)/Tot
+  Accuracy.Rate # Check it out
+  Error.Rate=(FalN+FalP)/Tot
+  Error.Rate # Check it out
+  # Sensitivity -- rate of correct positives
+  Sensitivity=TruP/TotP # Proportion of correct positives
+  Sensitivity # Check it out
+  # Specificity -- rate of correct negatives
+  Specificity=TruN/TotN # Proportion of correct negatives
+  Specificity
+  # False Positive Rate = 1 - specificity (useful for ROC curves)
+  FalP.Rate = 1 - Specificity
+  FalP.Rate
+  rates=c(Accuracy.Rate, Error.Rate, Sensitivity, Specificity, FalP.Rate)
+  names(rates)=c("Accuracy Rate", "Error Rate", "Sensitivity", "Specificity", "False Positives")
+  return(rates)
+}
+
+
+errorStats(glm.preds.test, test$RESP)
+
+#######################################
+
+best2 = qda(RESP~ log(days_since_last_activity)+(Upmarket), family=binomial(link="logit"), data=train )
+
+summary(best2)
+best2
+
+# Now let's make predictions with the train model and the test subsample
+qda.pred2=predict(best2, test)
+
+qda.pred2$class # Inspect the classifications
+qda.pred2$posterior # Inspect the respective probabilities
+qda.pred2$posterior[,2] # Just the second column for prob(chd=1)
+
+
+# And display the resulting confusion matrices
+# Lambda=0.50
+qda.confmat2 <- table(qda.pred2$class, test$RESP) 
+qda.confmat2
+
+
+TruN=qda.confmat2[1,1] # True negatives
+TruP=qda.confmat2[2,2] # True positives
+FalN=qda.confmat2[1,2] # False negatives
+FalP=qda.confmat2[2,1] # False positives
+TotN=qda.confmat2[1,1] + qda.confmat2[2,1] # Total negatives
+TotP=qda.confmat2[1,2] + qda.confmat2[2,2] # Total positives
+Tot=TotN+TotP # Total
+
+# Now let's use these to compute accuracy and error rates
+
+Accuracy.Rate=(TruN+TruP)/Tot
+# Accuracy.Rate # Check it out
+
+Error.Rate=(FalN+FalP)/Tot
+# Error.Rate # Check it out
+
+# Sensitivity -- rate of correct positives
+
+Sensitivity=TruP/TotP # Proportion of correct positives
+# Sensitivity # Check it out
+
+# Specificity -- rate of correct negatives
+
+Specificity=TruN/TotN # Proportion of correct negatives
+# Specificity
+
+# False Positive Rate = 1 - specificity (useful for ROC curves)
+
+FalP.Rate = 1 - Specificity
+# FalP.Rate
+
+qda.rates2=c(Accuracy.Rate, Error.Rate, Sensitivity, Specificity, FalP.Rate)
+
+names(qda.rates2)=c("Accuracy Rate", "Error Rate", "Sensitivity", "Specificity", "False Positives")
+
+qda.rates2
+
+best.normal.qda <- qda.rates2
+best.glm <- errorStats(glm.preds.test, test$RESP)
+best.qda <- qda.rates
+
+best.normal.qda
+best.glm 
+best.qda
+
+
