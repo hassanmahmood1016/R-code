@@ -1,0 +1,203 @@
+#Solar radiation analysis
+
+##Objective
+
+#Objectives of the current project are creating couple of models for simulation solar radiation, selecting best predictors for solar radiation, testing model performance and recommendations on the model usage.
+
+##Data specification
+
+#Dataset provided for analysis has structure described below.
+
+
+#set locale
+Sys.setlocale("LC_ALL", "English")
+if (!"rpart" %in% installed.packages()) install.packages("rpart")
+library(rpart)
+if (!"randomForest" %in% installed.packages()) install.packages("randomForest")
+library(randomForest)
+if (!"lme4" %in% installed.packages()) install.packages("lme4")
+library(lme4)
+if (!"bayesm" %in% installed.packages()) install.packages("bayesm")
+library(bayesm)
+if (!"MASS" %in% installed.packages()) install.packages("MASS")
+library(MASS)
+if (!"lars" %in% installed.packages()) install.packages("lars")
+library(lars)
+if (!"pls" %in% installed.packages()) install.packages("pls")
+library(pls)
+if (!"gbm" %in% installed.packages()) install.packages("gbm")
+library(gbm)
+if (!"caret" %in% installed.packages()) install.packages("caret")
+library(caret)
+#read data
+data_init <- read.csv("SolarPrediction.csv")
+#observe data structure
+str(data_init)
+
+#There are 32686 observations by 11 features avaialable for analysis. Some variables should be converted to another types.
+
+#fix date object
+data_init$Data <- unlist(lapply(strsplit(as.character(data_init$Data), " "), function(x){x[1]}))
+#merge date and time
+data_init$datetime <- paste(data_init$Data, data_init$Time)
+#convert to datetime
+data_init$datetime <- strptime(data_init$datetime, "%m/%d/%Y %H:%M:%S")
+#detect month
+data_init$Month <- format(data_init$datetime, "%b")
+#detect weekday
+data_init$weekday <- format(data_init$datetime, "%a")
+#detect hour
+data_init$hour <- format(data_init$datetime, "%H")
+#fix sunrise time
+data_init$TimeSunRise <- strptime(paste(data_init$Data,  as.character(data_init$TimeSunRise)), "%m/%d/%Y %H:%M:%S")
+#fix sunset time
+data_init$TimeSunSet <- strptime(paste(data_init$Data,  as.character(data_init$TimeSunSet)), "%m/%d/%Y %H:%M:%S")
+#detect sunset hour
+data_init$sunset_hour <- format(data_init$TimeSunSet, "%H:%M")
+#detect sunrise hour
+data_init$sunrise_hour <- format(data_init$TimeSunRise, "%H:%M")
+#convert to decimals
+data_init$sunrise_decimal <- sapply(strsplit(data_init$sunrise_hour,":"),
+  function(x) {
+    x <- as.numeric(x)
+    x[1]+x[2]/60
+  }
+)
+#convert to decimals
+data_init$sunset_decimal <- sapply(strsplit(data_init$sunset_hour,":"),
+  function(x) {
+    x <- as.numeric(x)
+    x[1]+x[2]/60
+  }
+)
+
+
+#As timeseries analysis is not used for this project, some variables will be excluded from the dataset.
+
+#select useful variables
+data_new <- data_init[, c("Radiation", "Temperature", "Pressure", "Humidity", "WindDirection.Degrees.",
+                          "Speed", "Month", "weekday", "hour", "sunrise_decimal", "sunset_decimal")]
+#view data summary
+summary(data_new)
+
+#Modified dataset uses 12 features and all columns are complete.
+
+##Exploratory analysis
+
+#Let's visualize distributions between variables using pairs plot.
+
+#pairs plot
+pairs(data_new[, sapply(data_new, function(y){class(y)%in% c("numeric", "integer")})])
+#observe correlation
+round(cor(data_new[, sapply(data_new, function(y){class(y)%in% c("numeric", "integer")})]), 2)
+
+
+#According to the plot and table above the best predictor for solar radiation is temperature. Distribution for those variables looks similar to linear and this pair of variables looks the most homoscedastic. At the same time, correlation between sunrise and sunset time is high enough and it could cause multicolinearity.
+
+#According to the project requirements model perfomance should be estimated using sample-out dataset. So, data will be separated into train and test subsets and different model will be propageted.
+
+
+#convert to factor
+data_new[, c("Month", "weekday", "hour")] <- lapply(data_new[, c("Month", "weekday", "hour")], factor)
+#set seed
+set.seed(123456)
+#define splitting indices
+indices <- sample(nrow(data_init), round(0.75*nrow(data_new)))
+#select train
+train <- data_new[indices,]
+#select test
+test <- data_new[-indices,]
+#create table to save accuracy
+accuracy_table <- data.frame('Model_name' = c('Linear model', 'Regression trees',  'Principal component regression', 'Lasso regression', 'Forward stagewise', 'Partial least squares'), "RMSE" = NA)
+
+
+
+##Model performance
+
+#Next chink of the code uses few popular models to predicte solar radiation for test dataset and estimate RMSE as measure of prediction accuracy.
+
+
+#################################################################################
+#lm
+#run lm
+model_lm <- lm(Radiation ~. , train)
+#predict consumption
+predict_lm <- predict(model_lm, test)
+#estimate RMSE
+accuracy_table[1, 2] <- sqrt(mean((test$Radiation - predict_lm)^2))
+#############################################################################
+#regression trees
+#run regression trees
+model_tree <- rpart(Radiation ~. , train, method = 'anova', control = rpart.control(cp = 0.005, minsplit = 20))
+#predict consumption
+predict_tree <- predict(model_tree, test)
+#estimate RMSE
+accuracy_table[2, 2] <- sqrt(mean((test$Radiation - predict_tree)^2))
+##########################################################################################
+#pcr
+#run model
+m.pcr <- pcr(Radiation ~ ., data=train , validation="CV")
+# select number of components (by CV)
+ncomp <- which.min(m.pcr$validation$adj)
+# predict
+predict_pcr <- predict(m.pcr, test , ncomp=ncomp)
+#estimate RMSE
+accuracy_table[3, 2] <- sqrt(mean((test$Radiation - predict_pcr)^2))
+####################################################################################
+#stagewise
+#run model
+m.lar <- lars(data.matrix(train[, -1]), train$Radiation, type = "forward.stagewise")
+plot(m.lar)
+# Cross-validation
+r <- cv.lars(data.matrix(train[, -1]), train$Radiation, type = "forward.stagewise")
+#bestfraction <- r$fraction[which.min(r$cv)]
+##### Note 5/8/11: in the new lars package 0.9-8, the field r$fraction seems to have been replaced by r$index. The previous line should therefore be replaced by:
+bestfraction <- r$index[which.min(r$cv)]
+# Observe coefficients
+#coef.lar <- predict(m.lar,data.matrix(test[, -1]), s=bestfraction, type="coefficient", mode="fraction")
+#coef.lar
+# Prediction
+predict_lar <- predict(m.lar, data.matrix(test[, -1]), s=bestfraction, type="fit", mode="fraction")$fit
+#estimate RMSE
+accuracy_table[5, 2] <- sqrt(mean((test$Radiation - predict_lar)^2))
+#######################################################################################
+
+#lasso
+#run model
+
+m.lasso <- lars(data.matrix(train[, -1]), train$Radiation)
+plot(m.lasso)
+# Cross-validation
+
+r <- cv.lars(data.matrix(train[, -1]), train$Radiation)
+#bestfraction <- r$fraction[which.min(r$cv)]
+##### Note 5/8/11: in the new lars package 0.9-8, the field r$fraction seems to have been replaced by r$index. The previous line should therefore be replaced by:
+ bestfraction <- r$index[which.min(r$cv)]
+
+# Observe coefficients
+
+#coef.lasso <- predict(m.lasso,data.matrix(test[, -1]),s=bestfraction,type="coefficient",mode="fraction")
+
+#coef.lasso
+
+# Prediction
+predict_lasso <- predict(m.lasso,data.matrix(test[, -1]),s=bestfraction,type="fit",mode="fraction")$fit
+#estimate RMSE
+
+accuracy_table[4, 2] <- sqrt(mean((test$Radiation - predict_lasso)^2))
+###########################################################################################
+
+#pls
+
+#create model
+m.pls <- plsr(Radiation ~ .,data=train , validation="CV")
+# select number of components (by CV)
+ncomp <- which.min(m.pls$validation$adj)
+
+# predict
+predict_pls <- predict(m.pls, test , ncomp=ncomp)
+#estimate RMSE
+accuracy_table[6, 2] <- sqrt(mean((test$Radiation - predict_pls)^2))
+#########################################################################################
+#view table
+accuracy_table
