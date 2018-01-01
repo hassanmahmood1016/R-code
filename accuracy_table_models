@@ -1,0 +1,182 @@
+```{r}
+#install libraries 
+library(caret)
+library(rpart)
+library(lme4)
+library(bayesm)
+library(MASS)
+library(lars)
+library(pls)
+library(gbm)
+library(car)
+require(randomForest)
+library(readr)
+library(xgboost)
+library(magrittr)
+library(dplyr)
+library(Matrix)
+
+
+#load training data 
+train <- read_csv("~/Desktop/ddd/train_data.csv")
+
+
+#load testing data
+library(readr)
+test <- read_csv("~/Desktop/ddd/test_data.csv")
+
+# create accuracy table
+accuracy_table <- data.frame('Model_name' = c('GLM days and upmarket', 'GLM Days upmarket 40 61 124 129 268 274 290 288 289',  'GLM days upmarket 40', 'GLM days upmarket 40 61 124', 'GLM days upmarket 40 61 124 192', 'GLM days upmarket 40 61 124 192 268','GLM days upmarket 40 61 124 192 268 274','GLM days upmarket 40 61 124 192 268 274 290','GLM days upmarket 40 61 124 192 268 290','GLM days upmarket 40 61 124 192 268 274 290 88','GLM days upmarket 40 61 268','regression tree Days upmarket','PLS regression days and upmarket','PLS Regression days upmarket 40 61 124 192 268 274 290','QDA regression days upmarket','QDA upmarket days 40', 'QDA upmarket days 40 61 124 192 268 274 290 '), "RMSE" = NA)
+
+
+#Run Glm models
+
+#Run Lm model with 2  
+model_glm <- glm(RESP~days_since_last_activity+Upmarket, data=train )
+summary(model_glm)
+
+#pridict glm model
+predict_glm <- predict(model_glm, test)
+
+#estimate RMSE accuracy table value #1 
+accuracy_table[1, 2] <- sqrt(mean((test$RESP - predict_glm)^2))
+
+######################################################################################
+#Run GlM model with mulitple 
+model_glm1 <- glm(RESP~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274+V290+V88+V289, family=binomial(link="logit"), data=train )
+
+#pridict glm model
+predict_glm1 <- predict(model_glm1, test)
+
+accuracy_table[2, 2] <- sqrt(mean((test$RESP - predict_glm1)^2))
+
+######################################################################################
+model_glm2 <- glm(RESP ~days_since_last_activity+Upmarket+V40, family=binomial(link="logit"), data=train )
+
+#pridict glm model
+predict_glm2 <- predict(model_glm2, test)
+
+accuracy_table[3, 2] <- sqrt(mean((test$RESP - predict_glm2)^2))
+######################################################################################
+model_glm3 <- glm(RESP ~days_since_last_activity+Upmarket+V40+V61+V124, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm3 <- predict(model_glm3, test)
+
+accuracy_table[4, 2] <- sqrt(mean((test$RESP - predict_glm3)^2))
+
+######################################################################################
+model_glm4 <- glm(RESP ~days_since_last_activity+Upmarket+V40+V61+V124+V192, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm4 <- predict(model_glm4, test)
+
+accuracy_table[5, 2] <- sqrt(mean((test$RESP - predict_glm4)^2))
+
+######################################################################################
+model_glm5 <- glm(RESP ~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm5 <- predict(model_glm5, test)
+
+accuracy_table[6, 2] <- sqrt(mean((test$RESP - predict_glm5)^2))
+######################################################################################
+model_glm6 <- glm(RESP ~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm6 <- predict(model_glm6, test)
+
+accuracy_table[7, 2] <- sqrt(mean((test$RESP - predict_glm6)^2))
+######################################################################################
+model_glm7 <- glm(RESP~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274+V290, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm7 <- predict(model_glm7, test)
+
+accuracy_table[8, 2] <- sqrt(mean((test$RESP - predict_glm7)^2))
+######################################################################################
+model_glm8 <- glm(RESP ~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V290, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm8 <- predict(model_glm8, test)
+
+accuracy_table[9, 2] <- sqrt(mean((test$RESP - predict_glm8)^2))
+######################################################################################
+model_glm9 <- glm(RESP~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274+V290+V88, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm9 <- predict(model_glm9, test)
+
+accuracy_table[10, 2] <- sqrt(mean((test$RESP - predict_glm9)^2))
+######################################################################################
+model_glm10 <- glm(RESP ~ Upmarket + days_since_last_activity + V40 + V61 + V268, family=binomial(link="logit"), data=train)
+
+#pridict glm model
+predict_glm10 <- predict(model_glm10, test)
+
+accuracy_table[11, 2] <- sqrt(mean((test$RESP - predict_glm10)^2))
+
+
+#Run regression trees
+#Run Reression Tree with just 2 
+model_tree <- rpart(RESP~days_since_last_activity+Upmarket, data=train, method = 'anova', control = rpart.control(cp = 0.005, minsplit = 20))
+predict_tree <- predict(model_tree, data=test)
+
+# estimate RMSE accuracy table value #2 
+accuracy_table[12, 2] <- sqrt(mean((test$RESP - predict_tree)^2))
+
+#####################################################################################
+
+# Run PLS regression 
+
+#pls
+#create model 
+m.pls <- plsr(RESP~days_since_last_activity+Upmarket, data=train, validation="CV")
+summary(m.pls)
+
+# select number of components (by CV)
+ncomp <- which.min(m.pls$validation$adj)
+
+# predict
+predict_pls <- predict(m.pls, data=test , ncomp=ncomp)
+
+#estimate RMSE 
+accuracy_table[13, 2] <- sqrt(mean((test$RESP - predict_pls)^2))
+
+#######################################################################################
+#create PLSR with multiple
+m.pls2 <-plsr(RESP~days_since_last_activity+Upmarket+V40+V61+V124+V192+V268+V274+V290, family=binomial(link="logit"), data=train )
+
+# select number of components (by CV)
+ncomp <- which.min(m.pls2$validation$adj)
+
+# predict
+predict_pls2 <- predict(m.pls2, data=test , ncomp=ncomp)
+
+#estimate RMSE 
+accuracy_table[14, 2] <- sqrt(mean((test$RESP - predict_pls2)^2))
+
+
+##QDA models
+#create LAD model
+qda.fit <- qda(RESP ~days_since_last_activity+Upmarket, data=train)
+#predict 
+predict_qda<- predict(qda.fit, test)
+accuracy_table[15, 2] <- sqrt(mean((predict_qda$class==test$RESP)^2))
+
+######################################################################################
+#create LAD model
+qda.fit2 <- qda(RESP ~days_since_last_activity+Upmarket+V40, family=binomial(link="logit"), data=train)
+#predict 
+predict_qda2<- predict(qda.fit2, test)
+accuracy_table[16, 2] <- sqrt(mean((predict_qda2$class==test$RESP)^2))
+
+
+######################################################################################
+qda.fit3 <- lda(RESP~ log(days_since_last_activity)+Upmarket+V40+V61+V124+V192+V268+V274+V290, family=binomial(link="logit"), data=train)
+#predict 
+predict_qda3<- predict(qda.fit3, test)
+accuracy_table[17, 2] <- sqrt(mean((predict_qda3$class==test$RESP)^2))
+
+accuracy_table 
+
